@@ -1,0 +1,4 @@
+#!/bin/bash
+
+set SERV_TST_IP 192.168.1.213
+set SERV_TST_PORT 33333

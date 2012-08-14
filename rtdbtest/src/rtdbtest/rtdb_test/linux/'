@@ -1,0 +1,23 @@
+#ifndef RTDB_TEST_HEADER
+#define RTDB_TEST_HEADER
+typedef union {
+	float aval;//analog value
+	float pval;//point value
+}value_t;
+
+/*key:
+ *    |--------------------|----------------------|---------------------|
+ *    |63----table_no----48|47-----field_no-----32|31----record_no-----0|
+ *    |--------------------|----------------------|---------------------|
+ */
+
+typedef struct {
+	long key;
+	value_t v;
+}TEST_POINT;
+typedef struct {
+	int table_no;
+	int field_no;
+}TABLE_FIELD;
+
+#endif

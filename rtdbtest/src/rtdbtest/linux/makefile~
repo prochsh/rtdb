@@ -1,0 +1,5 @@
+VPATH = ../:~/db_def:~/src/include/db_api:~/lib/
+CC = gcc
+prog:read_rtdb.o
+%.o: %.c
+	$(CC) -o $@  $^ librtdb_api.so

@@ -1,0 +1,365 @@
+#include "Simulate_Fes.hxx"
+#include "Simulate_Fes_init.hxx"
+#include "Simulate_Fes_queue.hxx"
+#include "Simulate_Fes_ana.hxx"
+#include "Simulate_Fes_poi.hxx"
+#include "Simulate_Fes_send_ana.hxx"
+#include "Simulate_Fes_send_poi.hxx"
+#include <d5000.hxx>
+#include <lib_msg.hxx>
+#include <message_channel.h>
+#include <message_type.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <string.h>
+#include <sys/time.h>
+
+#define VALID 1
+#define INVALID -1
+
+//parameter
+float SimFes_ana_max_raw_value;
+float SimFes_ana_min_raw_value;
+int SimFes_ana_chg_interval;
+int SimFes_poi_chg_interval;
+int SimFes_ana_num_per_packet;
+int SimFes_poi_num_per_packet;
+int SimFes_max_ana_num_per_dev_tab;
+int SimFes_max_poi_num_per_dev_tab;
+
+SIMFES_QUEUE* SimFes_ana_fifo;
+SIMFES_QUEUE* SimFes_poi_fifo;
+
+int SimFes_link_num;
+int SimFes_max_link_num;
+SimFes_link *SimFes_links;
+
+int SimFes_station_num;
+int SimFes_max_station_num;
+SimFes_station *SimFes_stations;
+
+//psid字段不重复的遥测点数目
+int SimFes_uniq_upanalog_num;
+//实时库中有效的遥测点数目
+int SimFes_valid_upanalog_num;
+//实时库中的遥测点数目
+int SimFes_upanalog_num;
+//实时库中能容纳的最大遥测点数目
+int SimFes_max_upanalog_num;
+SimFes_analog *SimFes_upanalogs;
+
+//实时库中的多源遥测点数目
+int SimFes_multi_upanalog_num;
+//实时库中能容纳的最大多源遥测点数目
+int SimFes_max_multi_upanalog_num;
+SimFes_multi_analog *SimFes_multi_upanalogs;
+
+int SimFes_uniq_uppoint_num;
+int SimFes_valid_uppoint_num;
+int SimFes_uppoint_num;
+int SimFes_max_uppoint_num;
+SimFes_point *SimFes_uppoints;
+
+int SimFes_multi_uppoint_num;
+int SimFes_max_multi_uppoint_num;
+SimFes_multi_point *SimFes_multi_uppoints;
+
+int SimFes_sca_ana_dev_tab_num;
+SimFes_sca_ana_dev_tab *SimFes_sca_ana_dev_tabs;
+
+int SimFes_sca_poi_dev_tab_num;
+SimFes_sca_poi_dev_tab *SimFes_sca_poi_dev_tabs;
+
+pthread_t SimFes_ana_tid;
+pthread_t SimFes_poi_tid;
+pthread_t SimFes_ana_send_tid;
+pthread_t SimFes_poi_send_tid;
+
+//MEASURE_SIMULATE_FES *measures_simulate_fes;
+
+void clean_exit(void);
+
+#ifdef SIMFES_DEBUG
+void get_time(char * time_str);
+#endif
+
+int main(int argc,char * *argv)
+{
+    if(argc!=4)
+    {
+        fprintf(stderr," Usage : %s context-name app-name proc-name",argv[0]);
+        exit(-1);
+    }
+
+    atexit(clean_exit);
+
+    //读取配置参数
+    if(SimFes_config()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]config failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //初始化遥测、遥信队列
+    SimFes_ana_fifo=SimFes_queue_init(sizeof(SGDPS_CALGCHG ));
+    if(!SimFes_ana_fifo)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init analog queue failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+    SimFes_poi_fifo=SimFes_queue_init(sizeof(SGDPS_CALGCHG));
+    if(!SimFes_poi_fifo)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init point queue failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //从实时库读取链路、厂站、量测参数
+    if(SimFes_init_link()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init link failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    if(SimFes_init_station()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init station failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    if(SimFes_init_multi_upana()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init multi upanalog failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    if(SimFes_init_multi_uppoi()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init multi uppoint failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //按psid字段排序遥测点
+    if(SimFes_sort_multi_upana_by_psid()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]sort multi upanalog by psid failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+	
+	//按psid字段排序遥信点
+    if(SimFes_sort_multi_uppoi_by_psid()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]sort multi uppoint by psid failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    if(SimFes_init_uppoi()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]init uppoint failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    /**
+    #ifdef SIMFES_DEBUG
+    	char time_str[32];
+    	sleep(10);
+    	for(int i=0; i<SimFes_max_upanalog_num; i++)
+    	{
+    		if(SimFes_upanalogs[i].valid==INVALID)
+    		 	continue;
+    		get_time(time_str);
+    		printf("%s	[DEBUG]phy_no:%d,id:%ld,psid:%ld\n",time_str,i,SimFes_upanalogs[i].analog_id,SimFes_upanalogs[i].psid);
+    		sleep(1);
+    	}
+    #endif
+    */
+
+    //按psid字段排序遥测点
+    if(SimFes_sort_upana_by_psid()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]sort upanalog by psid failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //按psid字段去除重复的遥测点
+    SimFes_uniq_upanalog_num=SimFes_uniq_upana_by_psid();
+
+    //按表划分遥测点
+    SimFes_split_ana_by_tab();
+
+    //按psid字段排序遥信点
+    if(SimFes_sort_uppoi_by_psid()<0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]sort uppoint by psid failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //按psid字段去除重复的遥测点
+    SimFes_uniq_uppoint_num=SimFes_uniq_uppoi_by_psid();
+
+    //按表划分遥信点
+    SimFes_split_poi_by_tab();
+
+#ifdef SIMFES_DEBUG
+    for(int i=0; i<SimFes_sca_ana_dev_tab_num; i++)
+        if(SimFes_sca_ana_dev_tabs[i].logfile!=NULL)
+            fclose(SimFes_sca_ana_dev_tabs[i].logfile);
+#endif
+
+    //初始化消息总线
+    int ret_val;
+    if((ret_val = init_msg(argc,argv,9,FES_HANDLE_RECV_CHANNEL,FES_COM_SEND_CHANNEL,FES_SER_SEND_CHANNEL,FES_MMI_SEND_CHANNEL,FES_MGR_SEND_CHANNEL,CH_DOWN_REAL_DATA,CH_CHANGE_DATA,CH_CTRL_REQ,CH_NOTIFY_FES))<0)
+    {
+        fprintf(stderr,"%s:%d:%s	Init msg error!\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+#ifdef SIMFES_DEBUG
+    printf("%s:%d:%s	sizeof(SGDPS_CALGCHG)=%d,SimFes_ana_num_per_packet=%d,packet_size=%d\n",__FILE__,__LINE__,__FUNCTION__,sizeof(SGDPS_CALGCHG),SimFes_ana_num_per_packet,sizeof(SGDPS_CALGCHG)*SimFes_ana_num_per_packet);
+    sleep(5);
+#endif
+
+    //为遥测量创建模拟线程
+    if((ret_val=pthread_create(&SimFes_ana_tid,NULL,SimFes_ana_action,NULL))!=0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]create SimFes_ana_action thread failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //为遥信量创建模拟线程
+#ifdef SIMFES_POI_DEBUG
+    if((ret_val=pthread_create(&SimFes_poi_tid,NULL,SimFes_poi_action,NULL)!=0))
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]create SimFes_poi_action thread failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+#endif
+
+    //为遥测量创建发送消息线程
+    if((ret_val=pthread_create(&SimFes_ana_send_tid,NULL,SimFes_ana_send,NULL))!=0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]create SimFes_ana_send thread failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+
+    //为遥信量创建发送消息线程
+#ifdef SIMFES_POI_DEBUG
+    if((ret_val=pthread_create(&SimFes_poi_send_tid,NULL,SimFes_poi_send,NULL))!=0)
+    {
+        fprintf(stderr,"%s:%d:%s		[ERROR]create SimFes_poi_send thread failed\n",__FILE__,__LINE__,__FUNCTION__);
+        exit(-1);
+    }
+#endif
+
+    int err;
+    void * tret;
+    while(1)
+    {
+        if((err=pthread_join(SimFes_ana_tid,&tret))!=0)
+        {
+            fprintf(stderr,"%s:%d:%s		[WARN]cannot join with thread SimFes_ana_tid:%s\n",__FILE__,__LINE__,__FUNCTION__,strerror(err));
+        }
+#ifdef SIMFES_POI_DEBUG
+        if((err=pthread_join(SimFes_poi_tid,&tret))!=0)
+        {
+            fprintf(stderr,"%s:%d:%s		[WARN]cannot join with thread SimFes_poi_tid:%s\n",__FILE__,__LINE__,__FUNCTION__,strerror(err));
+        }
+#endif
+        if((err=pthread_join(SimFes_ana_send_tid,&tret))!=0)
+        {
+            fprintf(stderr,"%s:%d:%s		[WARN]cannot join with thread SimFes_ana_send_tid:%s\n",__FILE__,__LINE__,__FUNCTION__,strerror(err));
+        }
+#ifdef SIMFES_POI_DEBUG
+        if((err=pthread_join(SimFes_poi_send_tid,&tret))!=0)
+        {
+            fprintf(stderr,"%s:%d:%s		[WARN]cannot join with thread SimFes_poi_send_tid:%s\n",__FILE__,__LINE__,__FUNCTION__,strerror(err));
+        }
+#endif
+    }
+
+    return 0;
+}
+
+void clean_exit(void)
+{
+    //释放遥测、遥信队列
+    SimFes_queue_destroy(SimFes_ana_fifo);
+    SimFes_queue_destroy(SimFes_poi_fifo);
+
+    //释放链路结构
+    for(int i=0; i<SimFes_max_link_num; i++)
+    {
+        if(SimFes_links[i].valid==VALID)
+            free(SimFes_links[i].stations);
+    }
+    free(SimFes_links);
+
+    //释放厂站结构
+    for(int i=0; i<SimFes_max_station_num; i++)
+    {
+        if(SimFes_stations[i].valid==VALID)
+        {
+            free(SimFes_stations[i].upanalogs);
+            free(SimFes_stations[i].uppoints);
+        }
+    }
+    free(SimFes_stations);
+
+    //释放多源遥测结构
+    free(SimFes_multi_upanalogs);
+
+    //释放遥信结构
+    free(SimFes_multi_uppoints);
+
+    //释放遥测结构
+    free(SimFes_upanalogs);
+
+    //释放遥信结构
+    free(SimFes_uppoints);
+
+    //释放遥测设备表结构
+    for(int i=0; i<SimFes_sca_ana_dev_tab_num; i++)
+    {
+        if(SimFes_sca_ana_dev_tabs[i].valid==VALID)
+        {
+            free(SimFes_sca_ana_dev_tabs[i].upanalogs);
+        }
+        if(SimFes_sca_ana_dev_tabs[i].logfile)
+        {
+            fclose(SimFes_sca_ana_dev_tabs[i].logfile);
+        }
+    }
+    free(SimFes_sca_ana_dev_tabs);
+
+    //释放遥信设备表结构
+    for(int i=0; i<SimFes_sca_poi_dev_tab_num; i++)
+    {
+        if(SimFes_sca_poi_dev_tabs[i].valid==VALID)
+        {
+            free(SimFes_sca_poi_dev_tabs[i].uppoints);
+        }
+        if(SimFes_sca_poi_dev_tabs[i].logfile)
+        {
+            fclose(SimFes_sca_poi_dev_tabs[i].logfile);
+        }
+    }
+    free(SimFes_sca_poi_dev_tabs);
+    /*
+       	for(int i=0;i<max_measure_num;i++)
+    	{
+    		while(i%ANA_NUM_ONE_LOGFILE)
+    		{
+    			fclose(measures_simulate_fes[i].logFile);
+    			free(measures_simulate_fes[i].file_usage_counter);
+    			pthread_mutex_destroy(measures_simulate_fes[i].lockFile);
+    			free(measures_simulate_fes[i].lockFile);
+    			pthread_cond_destroy(measures_simulate_fes[i].condFile);
+    			free(measures_simulate_fes[i].condFile);
+    		}
+    	}
+    	free(measures_simulate_fes);
+    */
+
+}
+

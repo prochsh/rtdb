@@ -1,0 +1,8 @@
+#
+step=0.1
+#
+max_ana_num=10000
+#
+ana_chg_interval=1
+#
+ana_num_in_packet=100

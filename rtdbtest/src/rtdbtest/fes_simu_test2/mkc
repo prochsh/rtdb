@@ -1,0 +1,52 @@
+#!/bin/sh
+
+CURPATH=`pwd`
+APPPATH=`dirname $0`
+APPHOMEPATH=$CURPATH
+while [ $APPHOMEPATH != "/" ]
+do
+    if [ -f "$APPHOMEPATH/platform.conf" ]
+    then
+        break;
+    else
+        APPHOMEPATH=`dirname $APPHOMEPATH`
+    fi
+done
+
+MAINPATH=`echo "$CURPATH/$APPPATH"`
+OBJ=$MAINPATH/obj
+if [ ! -d $OBJ ] ; then
+    OBJ=$MAINPATH/../obj
+fi
+appName=$MAINPATH/.mkapp
+grep "#make " $MAINPATH/Makefile | sed "s/#make //g" > $appName
+
+if [ "$#" -eq 0 ]
+then
+	echo " Usage : mkc app [W]
+         W : add '-Wall' option for CC"	 
+	echo " Examples:"
+	awk '{
+		print "             mkc  ",$1;
+		}' $appName
+
+    echo "$CURPATH"
+    echo "$APPPATH"
+    echo "$MAINPATH"
+	exit 3
+fi
+
+grep $1 $appName > /dev/null
+if [ $? = 0 ]
+then
+	cd $OBJ
+    if [ "$2" = "W" ] ; then
+		make $1 -f $MAINPATH/Makefile MAKEPATH=$MAINPATH APPHOMEDIR=$APPHOMEPATH PROC_DEF=$1 Wall=$2 -w
+    else
+		make $1 -f $MAINPATH/Makefile MAKEPATH=$MAINPATH APPHOMEDIR=$APPHOMEPATH PROC_DEF=$1 -w
+    fi
+else
+	echo " Error: $1 is not a application , check it "
+	exit 4
+fi 
+

@@ -1,0 +1,362 @@
+/*************************************************
+ * Copyright (C),
+ * File name:      d5000.hxx // 文件名
+ * Author:       Version: 2.0        Date: // 作者、版本及完成日期
+ * Description:    // 用于详细说明此程序文件完成的主要功能，与其他模块
+ *                 // 或函数的接口，输出值、取值范围、含义及参数间的控
+ *                 // 制、顺序、独立或依赖等关系
+ * Others:         // 其它内容的说明
+ * Function List:  // 主要函数列表，每条记录应包括函数名及功能简要说明
+ *   1. ....
+ *      History:        // 修改历史记录列表，每条修改记录应包括修改日期、修改
+ *                 // 者及修改内容简述  
+ *   1. Date:
+ *      Author:
+ *      Modification:
+ *   2. ...
+ **************************************************/
+
+
+
+
+#ifndef    _D5000_HXX_
+#define    _D5000_HXX_
+
+
+
+
+#define    MAX_MES_LEN    512    
+//#define    MAX_DATA_LEN    500
+#define    MAX_DATA_LEN    40000
+#define    MAX_CTRL_LEN    512    
+
+
+
+enum CHANNEL_DEF
+{
+    CH_UP_REAL_DATA   = 30,        //上行实时数据通道，fes--->scada
+    CH_DOWN_REAL_DATA = 31,        //下行实时数据通道，scada--->fes
+
+    CH_CHANGE_DATA    = 34,        //下行变化数据通道，scada--->fes
+
+    CH_CTRL_REQ       = 11,        //控制请求通道，scada--->fes
+    CH_CTRL_REPLY     = 12         //控制应答通道，fes--->scada
+};
+
+
+#define MT_YX_CHANGE          1000    //变化遥信
+#define MT_YX_UPDATE          1001    //全遥信
+#define MT_YX_SOE             1002    //SOE
+#define MT_YC_CHANGE          1010    //变化遥测
+#define MT_YC_UPDATE          1011    //全遥测
+#define MT_YM_UPDATE          1020    //全遥脉
+#define MT_DATA_REQUEST       1030    //数据召唤
+
+//遥控
+#define MT_YK_PREV            1050            //遥控预置
+#define MT_YK_EXEC            1051            //遥控执行
+#define MT_YK_CANCEL          1052            //遥控撤销
+#define MT_YK_DIRECT          1053            //直接执行,由前置自动完成预置,执行的完整过程
+#define MT_YK_REPLY           1054            //遥控应答
+//档位调节
+#define MT_TAP_PREV           1055            //预置
+#define MT_TAP_EXEC           1056            //执行
+#define MT_TAP_CANCEL         1057            //撤销
+#define MT_TAP_DIRECT         1058            //直接执行,由前置自动完成预置,执行的完整过程
+#define MT_TAP_REPLY          1059            //应答
+//设点遥调
+#define MT_SET_EXEC           1060            //执行
+#define MT_SET_REPLY          1061            //应答
+//脉宽控制
+#define MT_PULSE_EXEC         1062            //执行
+#define MT_PULSE_REPLY        1063            //应答
+
+typedef struct SCADA_MES_HEAD
+{
+    int    package_type;
+    int    data_num;
+    time_t second;
+    short  msecond;
+    int    para;
+}SCADA_MES_HEAD;
+
+typedef struct SCADA_MES
+{
+    SCADA_MES_HEAD    head;
+    char    mes[MAX_DATA_LEN-sizeof(SCADA_MES_HEAD)];
+}SCADA_MES;
+
+//遥测全数据结构
+typedef struct SGDPS_CFALG
+{
+    long  keyid;
+    float value;
+    int   status;
+}SGDPS_CFALG;
+
+//遥信全数据结构
+typedef struct SGDPS_CFPNT
+{
+    long keyid;
+    char value;
+    int  status;
+}SGDPS_CFPNT;
+
+//变化遥测报文
+typedef struct SGDPS_CALGCHG
+{
+    long  keyid;
+    float value;
+    int   status;
+}SGDPS_CALGCHG;
+
+//变化遥测带时标报文
+typedef struct SGDPS_CALGCHGWithTm
+{
+    long  keyid;
+    float value;
+    int   status;
+    int   second;
+    short msecond;
+}SGDPS_CALGCHGWithTm;
+
+//变化遥信报文
+typedef struct SGDPS_CPNTCHG
+{
+    long keyid;
+    char value;
+    int  status;
+}SGDPS_CPNTCHG;
+
+//变化遥信带时标报文
+typedef struct SGDPS_CPNTCHGWithTm
+{
+    long keyid;
+    char value;
+    int  status;
+    time_t second;
+    short  msecond;
+}SGDPS_CPNTCHGWithTm;
+
+//SOE报文
+typedef struct SGDPS_PNTSOE
+{
+    long  keyid;
+    char  value;
+    int   status;
+    time_t   second;
+    short msecond;
+}SGDPS_PNTSOE;
+
+//全遥脉
+typedef struct SGDPS_PCOUNT
+{
+    long  keyid;
+    float value;
+    int   status;
+}SGDPS_PCOUNT;
+
+//数据召唤
+typedef struct SGDPS_DATAREQUEST
+{
+    char type;        //1:analog, 2:point, 3:pcount, -1:all
+    long st_id;       //厂站ID
+}SGDPS_DATAREQUEST;
+
+//遥控下行报文结构
+typedef struct SGDPS_DCREQUEST
+{
+    long keyid;
+    char value;
+}SGDPS_DCREQUEST;
+
+//遥控返校
+typedef struct SGDPS_DCREPLY
+{
+    long keyid;
+    int  result;
+}SGDPS_DCREPLY;
+
+
+typedef struct SGDPS_ALARM
+{
+    char  almmsg[128];    //报警内容
+    char  sourceid[20];   //发送报警的程序名
+    int   gtime_s;        //时间（秒）
+    short gtime_m;        //时间（毫秒）
+}SGDPS_ALARM;
+
+#define    MAX_ANA_CHG     30*8
+#define    MAX_POI_CHG     30*8    //MAX_DATA_LEN/sizeof(SGDPS_CPNTCHG)
+#define    MAX_ANA_CHG_TM  20*6    //MAX_DATA_LEN/sizeof(SGDPS_CALGCHGWithTm)
+#define    MAX_POI_CHG_TM  5*2    //MAX_DATA_LEN/sizeof(SGDPS_CPNTCHGWithTm)
+#define    MAX_ANA_FULL    30*8
+#define    MAX_POI_FULL    30*8    //MAX_DATA_LEN/sizeof(SGDPS_CFPNT)
+#define    MAX_MOD_EVT     10      //Receive link moidify max event
+
+#define    MAX_SOE        MAX_DATA_LEN/sizeof(SGDPS_PNTSOE)
+
+/*
+#define    MAX_ANA_CHG    MAX_MES_LEN/sizeof(SGDPS_CALGCHG)
+#define    MAX_POI_CHG    MAX_MES_LEN/sizeof(SGDPS_CPNTCHG)
+#define    MAX_ANA_CHG_TM    MAX_MES_LEN/sizeof(SGDPS_CALGCHGWithTm)
+#define    MAX_POI_CHG_TM    MAX_MES_LEN/sizeof(SGDPS_CPNTCHGWithTm)
+#define    MAX_ANA_FULL    MAX_MES_LEN/sizeof(SGDPS_CFALG)    
+#define    MAX_POI_FULL    MAX_MES_LEN/sizeof(SGDPS_CFPNT)
+
+#define    MAX_SOE        MAX_MES_LEN/sizeof(SGDPS_PNTSOE)
+
+typedef	struct LINK_MODIFY_QUE
+{
+	int			input_cur_pos;//当前插入数据库变化事件在队列当中的位置
+	int			deal_cur_pos  //当前处理数据库变化在队列中的位置
+	LINK_MODIFY_STRUCT	link_notify_que[MAX_MOD_EVT];//最多可以缓存MAX_MOD_EVT处理数据库变化事件
+}LINK_MODIFY_QUE;
+*/
+
+extern    int    full_ana_count;
+extern    int    full_poi_count;
+extern    int    full_soe_count;
+extern    int    chg_ana_count;
+extern    int    chg_poi_count;
+extern    int    chg_soe_count;
+
+extern    SGDPS_CFALG        full_ana[MAX_ANA_FULL];
+extern    SGDPS_CFPNT        full_poi[MAX_POI_FULL];
+extern    SGDPS_CALGCHG        chg_ana[MAX_ANA_CHG];
+extern    SGDPS_CPNTCHG        chg_poi[MAX_POI_CHG];
+extern    SGDPS_CALGCHGWithTm    chg_ana_tm[MAX_ANA_CHG_TM];
+extern    SGDPS_CPNTCHGWithTm    chg_poi_tm[MAX_POI_CHG_TM];
+
+extern    SGDPS_PNTSOE        full_soe[MAX_SOE];
+extern    SGDPS_PNTSOE        chg_soe[MAX_SOE];
+
+extern    SGDPS_CFALG        old_ana[MAX_ANA_FULL];
+extern    SGDPS_CFPNT        old_poi[MAX_POI_FULL];
+
+
+
+
+
+/*******************************************************************************************
+考虑到控制对象、控制参数等因素，控制分四类：
+遥控：一次设备分/合，如开关刀闸；二次信号动作/复归
+档位调节：变压器自动或手动调档
+设点遥调：主要用于机组自动或手动调节，AVC也可用
+脉宽控制：主要用于机组自动或手动调节
+
+表结构设计原则：
+具体的控制参数（通道、点号、基值、系数等）在前置数据库中录入，具体结构由前置定。
+对于控制可能涉及到得闭锁逻辑，如遥控，有时需判控制对象相关的其他量的状态，则由后台处理，可在后台数据库中录入。
+
+报文通讯设计原则：
+每类控制设计两种报文结构：请求结构、应答结构。
+每类控制根据控制特点，定义若干个报文类型。
+所有控制共用两个消息通道：控制请求通道（后台->前置），请求报文发送至该通道；控制应答通道（前置->后台），应答报文发送至该通道
+报文含控制对象、控制目标、控制方式等，前置收到后根据报文内容查找相关控制参数下方到合适的通道，对于下方情况（成功、失败）给后台发送相应的应答报文。
+对于后台发送的控制请求，无论是预置、执行、直接执行，为了便于后台判断结果，前置是否均需应答？
+
+消息通道定义：
+    控制请求通道：     CH_CTRL_REQ
+    控制应答通道：    CH_CTRL_REPLY
+
+报文类型定义：
+    遥控：
+            预置：            MT_YK_PREV
+            执行：            MT_YK_EXEC
+            撤销:            MT_YK_CANCEL
+            直接执行：        MT_YK_DIRECT            //由前置自动完成预置、执行的完整过程
+            应答：            MT_YK_REPLY
+    档位调节:
+            预置：            MT_TAP_PREV
+            执行：            MT_TAP_EXEC
+            撤销:            MT_YK_CANCEL
+            直接执行：        MT_TAP_DIRECT            //由前置自动完成预置、执行的完整过程
+            应答：            MT_TAP_REPLY
+    设点遥调:
+            执行：            MT_SET_EXEC
+            应答：            MT_SET_REPLY
+    脉宽控制:
+            执行：            MT_PULSE_EXEC
+            应答：            MT_PULSE_REPLY
+*******************************************************************************************/
+
+/*
+报文结构：
+*/
+
+typedef long KEY_ID_STRU;
+
+struct CtrlPkgHead
+{
+    int    package_type;    //包类型
+    int    data_num;        //个数
+    int    para1;           //备用
+    int    para2;           //备用
+    int    para3;           //备用
+};
+
+struct TYkReq                 //遥控请求,后台->前置
+{
+    KEY_ID_STRU     key_id;        
+    char            ctrl_type;         //控制类型:1==普通遥控;2==检同期遥控;3==检无压遥控
+    char            ctrl_value;        //控制值:0==控分;1==控合
+};
+
+struct TTapReq                //档位调节请求,后台->前置
+{
+    KEY_ID_STRU     key_id;
+    char            ctrl_value;        //控制值:0==控升;1==控降;2==控停
+};
+
+struct TSetReq                //设点遥调请求,后台->前置
+{
+    KEY_ID_STRU      key_id;
+    char             ctrl_type;         //控制类型:0==普通;1==增加;2==减少
+    float            set_value;        //设点值
+}; 
+
+struct TYkReply               //遥控应答,前置->后台
+{
+    KEY_ID_STRU     key_id;        
+    char            ctrl_type;
+    char            ctrl_value;
+    //上述变量与对应的请求报文一致
+    char            ctrl_result;       //控制结果，0==成功；其他值表示错误
+    char            err_msg[64];       //错误原因
+};
+
+struct TTapReply              //档位调节应答,前置->后台
+{
+    KEY_ID_STRU     key_id;
+    char            ctrl_value;
+    //上述变量与对应的请求报文一致
+    char            ctrl_result;       //控制结果，0==成功；其他值表示错误
+    char            err_msg[64];       //错误原因
+};
+struct TSetReply              //设点遥调应答,前置->后台
+{
+    KEY_ID_STRU     key_id;
+    char            ctrl_type;
+    float           set_value;
+    //上述变量与对应的请求报文一致
+    char            ctrl_result;       //控制结果，0==成功；其他值表示错误
+    char            err_msg[64];       //错误原因
+};  
+
+struct CtrlPkg                //控制数据包,同一包只有一类控制信息                       
+{                                                                 
+    CtrlPkgHead     package_head;                             
+    char            mes[MAX_CTRL_LEN-sizeof(CtrlPkgHead)];  
+};  
+
+struct DataRequest     //数据召唤
+{
+    char   type;       //1:yc, 2:yx, 3:ym, -1:all
+    long   st_id;      //厂站ID
+    //DEVICE_ID   st_id;      //厂站ID
+};
+
+
+
+#endif
